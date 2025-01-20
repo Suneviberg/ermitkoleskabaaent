@@ -129,7 +129,7 @@ body {
   white-space: pre-line;
 }
 
-/* NEW: styling for the "Enable Audio" button */
+/* Button for enabling audio */
 #enableAudioBtn {
   display: block;
   width: 100%;
