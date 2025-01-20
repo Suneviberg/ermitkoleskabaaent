@@ -27,7 +27,7 @@ body {
 .camera-log-container {
   display: flex;
   gap: 20px;
-  flex-wrap: wrap; /* so it can wrap on small screens */
+  flex-wrap: wrap;
   justify-content: center;
   align-items: flex-start;
   width: 100%;
@@ -104,17 +104,17 @@ body {
   margin: 5px 0 0;
   font-size: 1.4rem;
   text-align: center;
-  color: #ffd700; /* gold color */
+  color: #ffd700; 
 }
 
 .longest-period-stamp {
   margin-top: 4px;
   font-size: 0.9rem;
   text-align: center;
-  color: #ccc; 
+  color: #ccc;
 }
 
-/* Historik / log */
+/* Log container */
 .log-container h2 {
   margin-bottom: 8px;
   font-size: 1.2rem;
@@ -127,4 +127,25 @@ body {
   padding: 6px 8px;
   margin-bottom: 10px;
   white-space: pre-line;
+}
+
+/* NEW: styling for the "Enable Audio" button */
+#enableAudioBtn {
+  display: block;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px 16px;
+  background-color: #555;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+  text-align: center;
+  transition: background-color 0.2s;
+  margin-top: 10px;
+}
+
+#enableAudioBtn:hover {
+  background-color: #666;
 }
