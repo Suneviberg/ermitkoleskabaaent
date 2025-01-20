@@ -1,0 +1,149 @@
+/* Nulstil */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #1e1e1e;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.main-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 1200px;
+  width: 100%;
+  padding: 20px;
+}
+
+.camera-log-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap; /* så de kan bryde linjen på små skærme */
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+}
+
+/* Video-boks */
+.video-container {
+  position: relative;
+  width: 480px; /* større bredde */
+  height: 360px; /* større højde */
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #444;
+}
+
+.video-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.status-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 6px 12px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+/* Info-boks */
+.info-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 300px;
+}
+
+/* Bokse til “Nuværende åbning”, Længste åbning og log */
+.stopwatch-box,
+.longest-period-box,
+.log-container {
+  background: #2f2f2f;
+  border: 2px solid #444;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+/* “Nuværende åbning” */
+.stopwatch-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: bold;
+  text-align: center;
+}
+
+.stopwatch-time {
+  margin: 5px 0 0;
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+/* Længste åbning */
+.longest-period-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: bold;
+  text-align: center;
+}
+
+.longest-period-time {
+  margin: 5px 0 0;
+  font-size: 1.4rem;
+  text-align: center;
+  color: #ffd700; /* Guld-lignende farve */
+}
+
+.longest-period-stamp {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  text-align: center;
+  color: #ccc;
+}
+
+/* Historik / log */
+.log-container h2 {
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.log-container #log > div {
+  background: #3f3f3f;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  white-space: pre-line; /* bevar evt. linebreaks */
+}
+
+/* Knappen “Download PDF” */
+#downloadPdfBtn {
+  display: block;
+  margin: 10px auto 0 auto;
+  padding: 8px 16px;
+  background-color: #555;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+#downloadPdfBtn:hover {
+  background-color: #666;
+}
