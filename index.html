@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Køleskabsdetektor m. PDF-log</title>
+  <title>Køleskabsdetektor</title>
   <link rel="stylesheet" href="styles.css">
 
-  <!-- jsPDF via CDN -->
+  <!-- jsPDF via CDN for PDF export (if you want that feature) -->
   <script 
     src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"
     integrity="sha256-rxzf+uZ6SOWTzSe0zqSz9Q9Fm6GHPQLr6vmz2fa2bW4="
@@ -17,7 +17,7 @@
   <div class="main-container">
     <div class="camera-log-container">
 
-      <!-- Venstre boks: Kamera og status -->
+      <!-- Camera and status -->
       <div class="video-container">
         <video id="video" autoplay playsinline></video>
         <div class="status-overlay">
@@ -25,7 +25,7 @@
         </div>
       </div>
 
-      <!-- Højre boks: “Nuværende åbning”, log og længste periode -->
+      <!-- Info: Current opening (stopwatch), longest opening, and log -->
       <div class="info-container">
         
         <div class="stopwatch-box">
@@ -42,17 +42,21 @@
         <div class="log-container">
           <h2>Historik</h2>
           <div id="log"></div>
-          <!-- Ny knap til at downloade PDF -->
+
+          <!-- Button to enable alarm audio on mobile -->
+          <button id="enableAudioBtn">Aktivér alarm-lyd</button>
+
+          <!-- Button to download PDF of log (optional) -->
           <button id="downloadPdfBtn">Download PDF</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Skjult canvas til billedanalyse -->
+  <!-- Hidden canvas for image analysis -->
   <canvas id="canvas" style="display:none;"></canvas>
 
-  <!-- Audio til alarm-tone (loop). Udskift evt. kilden med egne lydfiler -->
+  <!-- Alarm audio -->
   <audio id="alarmAudio" loop>
     <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg">
     <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.mp3" type="audio/mpeg">
@@ -60,7 +64,7 @@
   </audio>
 
   <script>
-    // HTML-elementer
+    // Grab references to DOM elements
     const video = document.getElementById('video');
     const statusSpan = document.getElementById('status');
     const canvas = document.getElementById('canvas');
@@ -72,24 +76,40 @@
     const longestPeriodSpan = document.getElementById('longestPeriod');
     const longestPeriodTimeSpan = document.getElementById('longestPeriodTime');
 
-    // Alarm
+    const enableAudioBtn = document.getElementById('enableAudioBtn');
+    const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+
     const alarmAudio = document.getElementById('alarmAudio');
 
-    // Tilstands-variabler
-    let isCurrentlyOpen = false;      // true = åbent, false = lukket
-    let openStartTime = 0;           // hvornår køleskabet blev åbnet (ms)
-    let stopwatchInterval = null;    // ID til setInterval for "Nuværende åbning"
-    
-    // Alarm-grænse (i ms). 30 sek = 30000 ms
+    // State variables
+    let isCurrentlyOpen = false;      // "Åbent" vs. "Lukket"
+    let openStartTime = 0;           // When it was opened
+    let stopwatchInterval = null;    
+
+    // Alarm triggers after 30 seconds open
     const ALARM_THRESHOLD_MS = 30000;
     let alarmIsPlaying = false;
 
-    // Længste periode: gemmer varighed + start/slut
+    // Longest period tracking
     let longestDurationMs = 0;
     let longestDurationStart = 0;
     let longestDurationEnd = 0;
 
-    // Start kamera (bagkamera)
+    // ---------------------------------------------------------------------
+    // Enable alarm-lyd on mobile: user must tap a button first
+    enableAudioBtn.addEventListener('click', () => {
+      alarmAudio.play().then(() => {
+        // Immediately pause so we don't actually hear it yet.
+        alarmAudio.pause();
+        alarmAudio.currentTime = 0;
+        console.log("Alarm-lyd aktiveret via bruger-interaktion.");
+      }).catch(err => {
+        console.warn("Audio enable failed:", err);
+      });
+    });
+
+    // ---------------------------------------------------------------------
+    // Initialize camera
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment' },
       audio: false
@@ -98,10 +118,10 @@
       video.srcObject = stream;
       video.onloadedmetadata = () => {
         video.play();
-        // Størrelse for tegning på canvas
+        // Match the canvas size for consistent analysis
         canvas.width = 480;
         canvas.height = 360;
-        // Start løbende billedanalyse
+        // Start analyzing frames
         requestAnimationFrame(analyzeFrame);
       };
     })
@@ -110,20 +130,22 @@
       statusSpan.textContent = "Kunne ikke få adgang til kameraet.";
     });
 
-    // Løbende billedanalyse: afgør Åben vs. Lukket
+    // ---------------------------------------------------------------------
+    // analyzeFrame: checks if "light" => open or "dark" => closed
     function analyzeFrame() {
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
         const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = frame.data;
-        const length = data.length; // 4 bytes pr pixel: RGBA
+        const length = data.length; // RGBA => 4 bytes per pixel
 
         let totalLuminance = 0;
         for (let i = 0; i < length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
+          // Luminance formula
           const lum = 0.299*r + 0.587*g + 0.114*b;
           totalLuminance += lum;
         }
@@ -131,71 +153,68 @@
         const numPixels = canvas.width * canvas.height;
         const avgLuminance = totalLuminance / numPixels;
 
-        // Threshold for åben vs. lukket
-        const threshold = 80;  // Justér "følsomhed"
-        const isOpen = avgLuminance > threshold;
+        // threshold for "åbent" vs. "lukket"
+        const threshold = 80; 
+        const isOpen = (avgLuminance > threshold);
 
-        // Skift fra lukket -> åbent
+        // detect changes
         if (isOpen && !isCurrentlyOpen) {
+          // went from Lukket -> Åbent
           isCurrentlyOpen = true;
           openStartTime = Date.now();
           startStopwatch();
-        }
-        // Skift fra åbent -> lukket
-        else if (!isOpen && isCurrentlyOpen) {
+        } else if (!isOpen && isCurrentlyOpen) {
+          // went from Åbent -> Lukket
           isCurrentlyOpen = false;
           stopStopwatch();
         }
 
-        // Opdater status
         statusSpan.textContent = isOpen ? "Åbent" : "Lukket";
       }
       requestAnimationFrame(analyzeFrame);
     }
 
-    // Starter "Nuværende åbning"-timer
+    // ---------------------------------------------------------------------
+    // Start the "Nuværende åbning" timer
     function startStopwatch() {
-      if (stopwatchInterval) return; // kører allerede?
+      if (stopwatchInterval) return; // if already running, skip
 
       stopwatchInterval = setInterval(() => {
         const now = Date.now();
         const elapsedMs = now - openStartTime;
         stopwatchSpan.textContent = formatTime(elapsedMs);
 
-        // Tjek om alarm skal startes
+        // Check if alarm should be triggered
         if (elapsedMs >= ALARM_THRESHOLD_MS && !alarmIsPlaying) {
           startAlarm();
         }
       }, 500);
     }
 
-    // Stopper "Nuværende åbning" og logger
+    // Stop the "Nuværende åbning" and log it
     function stopStopwatch() {
-      // Stop interval
       if (stopwatchInterval) {
         clearInterval(stopwatchInterval);
         stopwatchInterval = null;
       }
-      // Stop alarm, hvis den spiller
       stopAlarm();
 
       const endTime = Date.now();
       const elapsedMs = endTime - openStartTime;
 
-      // Tjek om det er ny "længste åbning"
+      // Update "længste åbning" if needed
       if (elapsedMs > longestDurationMs) {
         longestDurationMs = elapsedMs;
         longestDurationStart = openStartTime;
         longestDurationEnd = endTime;
 
-        // Opdater felt for længste åbning
         longestPeriodSpan.textContent = formatTime(longestDurationMs);
         const startStr = formatClockTime(new Date(longestDurationStart));
         const endStr = formatClockTime(new Date(longestDurationEnd));
         longestPeriodTimeSpan.textContent = `Klokken ${startStr} - ${endStr}`;
       }
 
-      // Tilføj log-linje
+      // Add log entry
       const startDate = new Date(openStartTime);
       const endDate = new Date(endTime);
       const startStr = formatClockTime(startDate);
@@ -206,11 +225,12 @@
       logEntry.innerText = `Klokken ${startStr} - ${endStr}\nÅben i ${durationStr}`;
       logDiv.prepend(logEntry);
 
-      // Nulstil "Nuværende åbning"
+      // reset "Nuværende åbning"
       stopwatchSpan.textContent = "00:00:00";
     }
 
-    // Alarm-funktioner
+    // ---------------------------------------------------------------------
+    // Alarm logic
     function startAlarm() {
       alarmIsPlaying = true;
       try {
@@ -226,11 +246,12 @@
       alarmIsPlaying = false;
       if (!alarmAudio.paused) {
         alarmAudio.pause();
-        alarmAudio.currentTime = 0; // Spol tilbage til start
+        alarmAudio.currentTime = 0;
       }
     }
 
-    // Hjælpefunktion: ms -> “HH:MM:SS”
+    // ---------------------------------------------------------------------
+    // Utility: ms -> "HH:MM:SS"
     function formatTime(ms) {
       let totalSeconds = Math.floor(ms / 1000);
       const hours = Math.floor(totalSeconds / 3600);
@@ -244,7 +265,7 @@
       ].join(':');
     }
 
-    // Hjælpefunktion: Date -> “HH:MM:SS”
+    // Utility: Date -> "HH:MM:SS"
     function formatClockTime(dateObj) {
       const hours = String(dateObj.getHours()).padStart(2, '0');
       const mins = String(dateObj.getMinutes()).padStart(2, '0');
@@ -252,11 +273,10 @@
       return `${hours}:${mins}:${secs}`;
     }
 
-    // --- PDF-funktionalitet med jsPDF ---
-    document.addEventListener('DOMContentLoaded', () => {
-      const downloadBtn = document.getElementById('downloadPdfBtn');
-      downloadBtn.addEventListener('click', () => {
-        // Hent alle <div> i loggen
+    // ---------------------------------------------------------------------
+    // PDF Export (using jsPDF)
+    if (downloadPdfBtn) {
+      downloadPdfBtn.addEventListener('click', () => {
         const logEntries = document.querySelectorAll('#log > div');
         
         let combinedText = '';
@@ -264,17 +284,12 @@
           combinedText += entry.innerText + '\n\n';
         });
         
-        // Opret jsPDF-dokument
-        const { jsPDF } = window.jspdf;
+        const { jsPDF } = window.jspdf; // from the CDN <script>
         const doc = new jsPDF();
-
-        // Tilføj teksten i PDF (10,10 = x,y)
         doc.text(combinedText, 10, 10);
-
-        // Download filen
         doc.save('log.pdf');
       });
-    });
+    }
   </script>
 </body>
 </html>
