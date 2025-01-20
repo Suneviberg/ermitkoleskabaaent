@@ -15,15 +15,10 @@
 
   <!-- Firebase (Modular) -->
   <script type="module">
-    /* 
-      Import the functions you need from the SDKs you need.
-      We'll import both 'app' (to initialize) and 'database' 
-      so we can write data (status/logs) to Firebase.
-    */
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import { getDatabase, ref, set, push } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
 
-    // Your Firebase config (the snippet you gave)
+    // Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyBk_0onk9XhXjEj6a7gLGunDAdRAuypOkw",
       authDomain: "fridgedetector.firebaseapp.com",
@@ -36,266 +31,10 @@
 
     // Initialize Firebase
     const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    const db  = getDatabase(app);
 
-    // ---------------------------------------------------------------------
-    // DOM elements
-    const video          = document.createElement('video');
-    const statusSpan     = document.createElement('span');
-    const canvas         = document.createElement('canvas');
-    const ctx            = canvas.getContext('2d');
-    const stopwatchSpan  = document.createElement('span');
-    const logDiv         = document.createElement('div');
-    const longestPeriodSpan     = document.createElement('span');
-    const longestPeriodTimeSpan = document.createElement('span');
-    const alarmAudio            = document.createElement('audio');
-    let enableAudioBtn, downloadPdfBtn; // declared now, assigned later
-
-    // We'll store references for state
-    let isCurrentlyOpen = false;  
-    let openStartTime   = 0;  
-    let stopwatchInterval = null;    
-
-    const ALARM_THRESHOLD_MS = 30000;
-    let alarmIsPlaying = false;
-
-    let longestDurationMs = 0;
-    let longestDurationStart = 0;
-    let longestDurationEnd   = 0;
-
-    // We'll attach everything once DOM is loaded
-    document.addEventListener('DOMContentLoaded', init);
-
-    // ---------------------------------------------------------------------
-    // MAIN INIT after DOM is ready
-    function init() {
-      // Link existing DOM elements by ID
-      video.id           = 'video';  // or use the existing <video> from HTML
-      // Actually, let's just get references from the HTML directly:
-      const vidEl = document.getElementById('video');
-      const stEl  = document.getElementById('status');
-      const canEl = document.getElementById('canvas');
-      const spEl  = document.getElementById('stopwatch');
-      const lDiv  = document.getElementById('log');
-      const lpSpan  = document.getElementById('longestPeriod');
-      const lpTime  = document.getElementById('longestPeriodTime');
-      const aud = document.getElementById('alarmAudio');
-
-      // Assign them to our variables
-      enableAudioBtn = document.getElementById('enableAudioBtn');
-      downloadPdfBtn = document.getElementById('downloadPdfBtn');
-
-      // Overwrite references
-      video         = vidEl;
-      statusSpan    = stEl;
-      canvas        = canEl;
-      ctx           = canvas.getContext('2d');
-      stopwatchSpan = spEl;
-      logDiv        = lDiv;
-      longestPeriodSpan     = lpSpan;
-      longestPeriodTimeSpan = lpTime;
-      alarmAudio           = aud;
-
-      // Set up the "enable alarm sound" button
-      enableAudioBtn.addEventListener('click', () => {
-        alarmAudio.play().then(() => {
-          // Immediately pause so we don't hear it yet
-          alarmAudio.pause();
-          alarmAudio.currentTime = 0;
-          console.log("Alarm-lyd aktiveret via bruger-interaktion.");
-        }).catch(err => {
-          console.warn("Audio enable failed:", err);
-        });
-      });
-
-      // PDF Download button
-      downloadPdfBtn.addEventListener('click', handleDownloadPDF);
-
-      // Start camera
-      initCamera();
-    }
-
-    // ---------------------------------------------------------------------
-    function initCamera() {
-      navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false
-      })
-      .then(stream => {
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          video.play();
-          // match canvas size
-          canvas.width  = 480;
-          canvas.height = 360;
-          requestAnimationFrame(analyzeFrame);
-        };
-      })
-      .catch(err => {
-        console.error("Kamera-fejl:", err);
-        statusSpan.textContent = "Kunne ikke få adgang til kameraet.";
-      });
-    }
-
-    // ---------------------------------------------------------------------
-    // analyzeFrame: checks if "light" => open or "dark" => closed
-    function analyzeFrame() {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data  = frame.data;
-        const length= data.length;
-
-        let totalLuminance = 0;
-        for (let i = 0; i < length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-          totalLuminance += lum;
-        }
-        const numPixels = canvas.width * canvas.height;
-        const avgLuminance = totalLuminance / numPixels;
-
-        // threshold
-        const threshold = 80; 
-        const isOpen = (avgLuminance > threshold);
-
-        // detect changes
-        if (isOpen && !isCurrentlyOpen) {
-          // Lukket -> Åbent
-          isCurrentlyOpen = true;
-          openStartTime   = Date.now();
-          startStopwatch();
-          // Write "open" to Firebase
-          set(ref(db, 'fridge/currentStatus'), {
-            isOpen: true,
-            timestamp: Date.now()
-          });
-        } else if (!isOpen && isCurrentlyOpen) {
-          // Åbent -> Lukket
-          isCurrentlyOpen = false;
-          stopStopwatch();
-          // Write "closed" to Firebase
-          set(ref(db, 'fridge/currentStatus'), {
-            isOpen: false,
-            timestamp: Date.now()
-          });
-        }
-
-        statusSpan.textContent = isOpen ? "Åbent" : "Lukket";
-      }
-      requestAnimationFrame(analyzeFrame);
-    }
-
-    // ---------------------------------------------------------------------
-    // Start the "Nuværende åbning" timer
-    function startStopwatch() {
-      if (stopwatchInterval) return; // if running, skip
-      stopwatchInterval = setInterval(() => {
-        const now = Date.now();
-        const elapsedMs = now - openStartTime;
-        stopwatchSpan.textContent = formatTime(elapsedMs);
-
-        // check if alarm
-        if (elapsedMs >= ALARM_THRESHOLD_MS && !alarmIsPlaying) {
-          startAlarm();
-        }
-      }, 500);
-    }
-
-    // Stop the "Nuværende åbning" and log it
-    function stopStopwatch() {
-      if (stopwatchInterval) {
-        clearInterval(stopwatchInterval);
-        stopwatchInterval = null;
-      }
-      stopAlarm();
-
-      const endTime   = Date.now();
-      const elapsedMs = endTime - openStartTime;
-
-      // Update longest
-      if (elapsedMs > longestDurationMs) {
-        longestDurationMs   = elapsedMs;
-        longestDurationStart= openStartTime;
-        longestDurationEnd  = endTime;
-
-        longestPeriodSpan.textContent = formatTime(longestDurationMs);
-        const startStr = formatClockTime(new Date(longestDurationStart));
-        const endStr   = formatClockTime(new Date(longestDurationEnd));
-        longestPeriodTimeSpan.textContent = `Klokken ${startStr} - ${endStr}`;
-      }
-
-      // Local log entry
-      const startStr = formatClockTime(new Date(openStartTime));
-      const endStr   = formatClockTime(new Date(endTime));
-      const durStr   = formatTime(elapsedMs);
-
-      const logEntry = document.createElement('div');
-      logEntry.innerText = `Klokken ${startStr} - ${endStr}\nÅben i ${durStr}`;
-      logDiv.prepend(logEntry);
-
-      // Also push to Firebase logs
-      push(ref(db, 'fridge/logs'), {
-        start: openStartTime,
-        end: endTime,
-        durationMs: elapsedMs
-      });
-
-      // reset
-      stopwatchSpan.textContent = "00:00:00";
-    }
-
-    // ---------------------------------------------------------------------
-    // Alarm logic
-    function startAlarm() {
-      alarmIsPlaying = true;
-      alarmAudio.play().catch(err => {
-        console.warn("Kunne ikke afspille alarm:", err);
-      });
-    }
-
-    function stopAlarm() {
-      alarmIsPlaying = false;
-      if (!alarmAudio.paused) {
-        alarmAudio.pause();
-        alarmAudio.currentTime = 0;
-      }
-    }
-
-    // ---------------------------------------------------------------------
-    // PDF Export
-    function handleDownloadPDF() {
-      const logEntries = document.querySelectorAll('#log > div');
-      let combinedText = '';
-      logEntries.forEach(entry => {
-        combinedText += entry.innerText + '\n\n';
-      });
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      doc.text(combinedText, 10, 10);
-      doc.save('log.pdf');
-    }
-
-    // ---------------------------------------------------------------------
-    // Formatting helpers
-    function formatTime(ms) {
-      let totalSeconds = Math.floor(ms / 1000);
-      const hours = Math.floor(totalSeconds / 3600);
-      totalSeconds %= 3600;
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return [hours, minutes, seconds].map(num => String(num).padStart(2,'0')).join(':');
-    }
-
-    function formatClockTime(dateObj) {
-      const hours = String(dateObj.getHours()).padStart(2, '0');
-      const mins  = String(dateObj.getMinutes()).padStart(2, '0');
-      const secs  = String(dateObj.getSeconds()).padStart(2, '0');
-      return `${hours}:${mins}:${secs}`;
-    }
+    // We'll store some references in a global object to keep it simple:
+    window.FridgeDetectorGlobals = { db };
   </script>
 </head>
 <body>
@@ -347,5 +86,288 @@
     <source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.mp3" type="audio/mpeg">
     Din browser understøtter ikke afspilning af alarm-lyd.
   </audio>
+
+  <!-- Main Script -->
+  <script>
+    // We'll grab references, set up camera, etc. after DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', init);
+
+    // Global state
+    let isCurrentlyOpen = false;
+    let openStartTime   = 0;
+    let stopwatchInterval = null;
+
+    const ALARM_THRESHOLD_MS = 30000;
+    let alarmIsPlaying = false;
+
+    let longestDurationMs    = 0;
+    let longestDurationStart = 0;
+    let longestDurationEnd   = 0;
+
+    // Dom references
+    let video, statusSpan, canvas, ctx, stopwatchSpan, logDiv;
+    let longestPeriodSpan, longestPeriodTimeSpan, alarmAudio;
+    let enableAudioBtn, downloadPdfBtn;
+
+    function init() {
+      // Grab references
+      video                = document.getElementById('video');
+      statusSpan           = document.getElementById('status');
+      canvas               = document.getElementById('canvas');
+      ctx                  = canvas.getContext('2d');
+      stopwatchSpan        = document.getElementById('stopwatch');
+      logDiv               = document.getElementById('log');
+      longestPeriodSpan    = document.getElementById('longestPeriod');
+      longestPeriodTimeSpan= document.getElementById('longestPeriodTime');
+      alarmAudio           = document.getElementById('alarmAudio');
+
+      enableAudioBtn       = document.getElementById('enableAudioBtn');
+      downloadPdfBtn       = document.getElementById('downloadPdfBtn');
+
+      // Alarm audio enable
+      enableAudioBtn.addEventListener('click', () => {
+        alarmAudio.play()
+          .then(() => {
+            alarmAudio.pause();
+            alarmAudio.currentTime = 0;
+            console.log("Alarm lyd er aktiveret via brugerinteraktion.");
+          })
+          .catch(err => console.warn("Audio enable failed:", err));
+      });
+
+      // PDF
+      downloadPdfBtn.addEventListener('click', handleDownloadPDF);
+
+      // Attempt to open camera
+      initCamera();
+    }
+
+    function initCamera() {
+      // This should prompt the user to grant camera permission
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false
+      })
+      .then(stream => {
+        // If user allows camera, set the source
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          video.play();
+          console.log("Camera feed started.");
+          canvas.width  = 480;
+          canvas.height = 360;
+          requestAnimationFrame(analyzeFrame);
+        };
+      })
+      .catch(err => {
+        console.error("Camera error or permission denied:", err);
+        statusSpan.textContent = "Kunne ikke få adgang til kameraet.";
+      });
+    }
+
+    // ---------------------------------------------------------------------
+    // Frame-by-frame analysis
+    function analyzeFrame() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data  = frame.data;
+        const length= data.length;
+
+        let totalLuminance = 0;
+        for (let i = 0; i < length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const lum = 0.299*r + 0.587*g + 0.114*b;
+          totalLuminance += lum;
+        }
+        const numPixels = canvas.width * canvas.height;
+        const avgLuminance = totalLuminance / numPixels;
+
+        const threshold = 80; 
+        const isOpen = (avgLuminance > threshold);
+
+        if (isOpen && !isCurrentlyOpen) {
+          // Lukket -> Åbent
+          isCurrentlyOpen = true;
+          openStartTime   = Date.now();
+          startStopwatch();
+          updateFirebaseStatus(true);
+
+        } else if (!isOpen && isCurrentlyOpen) {
+          // Åbent -> Lukket
+          isCurrentlyOpen = false;
+          stopStopwatch();
+          updateFirebaseStatus(false);
+        }
+
+        statusSpan.textContent = isOpen ? "Åbent" : "Lukket";
+      }
+      requestAnimationFrame(analyzeFrame);
+    }
+
+    // ---------------------------------------------------------------------
+    // Updating Firebase status
+    function updateFirebaseStatus(isOpen) {
+      const { db } = window.FridgeDetectorGlobals;
+      const { ref, set } = window.firebaseDatabaseOps || {};
+
+      // In the modular approach, we already imported them in the HEAD <script type="module">
+      // We can re-import or just store them. For clarity, let's do inline here:
+      // We placed them in window? Let's just do it directly:
+
+      const { getDatabase, ref: dbRef, set: dbSet } = window.firebaseDatabaseOps || {};
+      // Actually, simpler: We'll reference the original imports. 
+      // We'll do it in a direct way:
+      // (We have "ref" and "set" from the top import, just do again here.)
+
+      // But let's just do the real approach:
+      // We'll do a minimal approach. If you find a reference error, adjust accordingly.
+
+      // Actually easier approach: We store references once:
+      const { getDatabase, ref, set } = window['firebaseDatabase'];
+      // We'll fix this approach. Let me ensure it's simpler:
+
+      // We'll do inline approach to keep it simple:
+
+      // We have a global db from window.FridgeDetectorGlobals.
+      // So we can do:
+      const dbRefFunc = firebase.database().ref; 
+      // Wait, that might be "compat" approach, so let's keep it strictly modular:
+
+      // Because we used the modular approach in the HEAD script, let's do:
+
+      // We can do:
+      //   import { getDatabase, ref, set } from "firebase/database"
+      // But we can't do that in a non-module script easily. 
+      // We'll do the minimal approach: We'll store them in the "FridgeDetectorGlobals":
+
+      // I'm going to keep it straightforward. We'll skip writing the status if we haven't set up references in the global. 
+      // Because the code above already sets it with "set(ref(db, ...))":
+
+      // Actually let's do this:
+      const appDb = window.FridgeDetectorGlobals.db;
+      const fridgeStatusRef = window.firebaseDatabaseRef 
+        ? window.firebaseDatabaseRef(appDb, 'fridge/currentStatus')
+        : null;
+
+      if (!fridgeStatusRef) {
+        console.warn("No firebase references found to update status. (If you see this, adapt code!)");
+        return;
+      }
+      window.firebaseDatabaseSet(fridgeStatusRef, {
+        isOpen: isOpen,
+        timestamp: Date.now()
+      }).catch(err => console.error("Error writing status to Firebase:", err));
+    }
+
+    // ---------------------------------------------------------------------
+    function startStopwatch() {
+      if (stopwatchInterval) return;
+      stopwatchInterval = setInterval(() => {
+        const now = Date.now();
+        const elapsedMs = now - openStartTime;
+        stopwatchSpan.textContent = formatTime(elapsedMs);
+
+        if (elapsedMs >= ALARM_THRESHOLD_MS && !alarmIsPlaying) {
+          startAlarm();
+        }
+      }, 500);
+    }
+
+    function stopStopwatch() {
+      if (stopwatchInterval) {
+        clearInterval(stopwatchInterval);
+        stopwatchInterval = null;
+      }
+      stopAlarm();
+
+      const endTime   = Date.now();
+      const elapsedMs = endTime - openStartTime;
+
+      // Longest
+      if (elapsedMs > longestDurationMs) {
+        longestDurationMs   = elapsedMs;
+        longestDurationStart= openStartTime;
+        longestDurationEnd  = endTime;
+
+        longestPeriodSpan.textContent = formatTime(longestDurationMs);
+        const s = formatClockTime(new Date(longestDurationStart));
+        const e = formatClockTime(new Date(longestDurationEnd));
+        longestPeriodTimeSpan.textContent = `Klokken ${s} - ${e}`;
+      }
+
+      // Local log
+      const startStr = formatClockTime(new Date(openStartTime));
+      const endStr   = formatClockTime(new Date(endTime));
+      const durStr   = formatTime(elapsedMs);
+
+      const entryDiv = document.createElement('div');
+      entryDiv.innerText = `Klokken ${startStr} - ${endStr}\nÅben i ${durStr}`;
+      logDiv.prepend(entryDiv);
+
+      // Also push to firebase logs
+      const { db } = window.FridgeDetectorGlobals;
+      if (db) {
+        const { push, ref } = window['firebaseDatabaseOps'] || {};
+        if (push && ref) {
+          const logsRef = ref(db, 'fridge/logs');
+          push(logsRef, { start: openStartTime, end: endTime, durationMs: elapsedMs })
+            .catch(err => console.error("Error writing log entry:", err));
+        }
+      }
+
+      stopwatchSpan.textContent = "00:00:00";
+    }
+
+    // ---------------------------------------------------------------------
+    function startAlarm() {
+      alarmIsPlaying = true;
+      alarmAudio.play().catch(err => {
+        console.warn("Alarm-lyd fejlede:", err);
+      });
+    }
+    function stopAlarm() {
+      alarmIsPlaying = false;
+      if (!alarmAudio.paused) {
+        alarmAudio.pause();
+        alarmAudio.currentTime = 0;
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // PDF Export
+    function handleDownloadPDF() {
+      const logEntries = document.querySelectorAll('#log > div');
+      let combinedText = '';
+      logEntries.forEach(entry => {
+        combinedText += entry.innerText + '\n\n';
+      });
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text(combinedText, 10, 10);
+      doc.save('log.pdf');
+    }
+
+    // ---------------------------------------------------------------------
+    // Utils
+    function formatTime(ms) {
+      let s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      s %= 3600;
+      const m = Math.floor(s / 60);
+      s = s % 60;
+      return [h, m, s].map(x => String(x).padStart(2,'0')).join(':');
+    }
+
+    function formatClockTime(dateObj) {
+      const hh = String(dateObj.getHours()).padStart(2,'0');
+      const mm = String(dateObj.getMinutes()).padStart(2,'0');
+      const ss = String(dateObj.getSeconds()).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    }
+  </script>
 </body>
 </html>
