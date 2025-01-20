@@ -1,4 +1,4 @@
-/* Nulstil */
+/* Reset */
 * {
   margin: 0;
   padding: 0;
@@ -27,17 +27,17 @@ body {
 .camera-log-container {
   display: flex;
   gap: 20px;
-  flex-wrap: wrap; /* så de kan bryde linjen på små skærme */
+  flex-wrap: wrap; /* so it can wrap on small screens */
   justify-content: center;
   align-items: flex-start;
   width: 100%;
 }
 
-/* Video-boks */
+/* Video box */
 .video-container {
   position: relative;
-  width: 480px; /* større bredde */
-  height: 360px; /* større højde */
+  width: 480px; 
+  height: 360px; 
   background: #000;
   border-radius: 8px;
   overflow: hidden;
@@ -61,7 +61,7 @@ body {
   font-weight: bold;
 }
 
-/* Info-boks */
+/* Info container: stopwatches, logs */
 .info-container {
   display: flex;
   flex-direction: column;
@@ -69,7 +69,7 @@ body {
   width: 300px;
 }
 
-/* Bokse til “Nuværende åbning”, Længste åbning og log */
+/* Boxes for “Nuværende åbning,” longest opening, and log */
 .stopwatch-box,
 .longest-period-box,
 .log-container {
@@ -79,7 +79,7 @@ body {
   padding: 10px;
 }
 
-/* “Nuværende åbning” */
+/* Current opening (stopwatch) */
 .stopwatch-title {
   margin: 0;
   font-size: 1rem;
@@ -93,7 +93,7 @@ body {
   text-align: center;
 }
 
-/* Længste åbning */
+/* Longest opening */
 .longest-period-title {
   margin: 0;
   font-size: 1rem;
@@ -105,17 +105,17 @@ body {
   margin: 5px 0 0;
   font-size: 1.4rem;
   text-align: center;
-  color: #ffd700; /* Guld-lignende farve */
+  color: #ffd700; /* “gold” color */
 }
 
 .longest-period-stamp {
   margin-top: 4px;
   font-size: 0.9rem;
   text-align: center;
-  color: #ccc;
+  color: #ccc; 
 }
 
-/* Historik / log */
+/* Log box */
 .log-container h2 {
   margin-bottom: 8px;
   font-size: 1.2rem;
@@ -127,12 +127,14 @@ body {
   border-radius: 4px;
   padding: 6px 8px;
   margin-bottom: 10px;
-  white-space: pre-line; /* bevar evt. linebreaks */
+  white-space: pre-line; /* preserve line breaks */
 }
 
-/* Knappen “Download PDF” */
+/* Shared button styles for both “Aktivér alarm-lyd” and “Download PDF” */
+#enableAudioBtn,
 #downloadPdfBtn {
   display: block;
+  width: 100%;
   margin: 10px auto 0 auto;
   padding: 8px 16px;
   background-color: #555;
@@ -140,10 +142,12 @@ body {
   border-radius: 4px;
   color: #fff;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 1rem;
+  text-align: center;
   transition: background-color 0.2s;
 }
 
+#enableAudioBtn:hover,
 #downloadPdfBtn:hover {
   background-color: #666;
 }
