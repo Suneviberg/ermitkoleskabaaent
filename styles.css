@@ -61,7 +61,7 @@ body {
   font-weight: bold;
 }
 
-/* Info container: stopwatches, logs */
+/* Info container */
 .info-container {
   display: flex;
   flex-direction: column;
@@ -69,7 +69,7 @@ body {
   width: 300px;
 }
 
-/* Boxes for “Nuværende åbning,” longest opening, and log */
+/* Boxes for “Nuværende åbning,” Længste åbning, and log */
 .stopwatch-box,
 .longest-period-box,
 .log-container {
@@ -79,7 +79,7 @@ body {
   padding: 10px;
 }
 
-/* Current opening (stopwatch) */
+/* Nuværende åbning (stopwatch) */
 .stopwatch-title {
   margin: 0;
   font-size: 1rem;
@@ -93,7 +93,7 @@ body {
   text-align: center;
 }
 
-/* Longest opening */
+/* Længste åbning */
 .longest-period-title {
   margin: 0;
   font-size: 1rem;
@@ -105,7 +105,7 @@ body {
   margin: 5px 0 0;
   font-size: 1.4rem;
   text-align: center;
-  color: #ffd700; /* “gold” color */
+  color: #ffd700; /* Guld-lignende farve */
 }
 
 .longest-period-stamp {
@@ -127,10 +127,10 @@ body {
   border-radius: 4px;
   padding: 6px 8px;
   margin-bottom: 10px;
-  white-space: pre-line; /* preserve line breaks */
+  white-space: pre-line;
 }
 
-/* Shared button styles for both “Aktivér alarm-lyd” and “Download PDF” */
+/* Buttons */
 #enableAudioBtn,
 #downloadPdfBtn {
   display: block;
