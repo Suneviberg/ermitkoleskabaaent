@@ -29,7 +29,7 @@
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    // Expose references so the main script can use them
+    // Expose references so our main script can use them
     window.FridgeDB = { db, ref, set, push };
   </script>
 </head>
@@ -64,10 +64,7 @@
           <div id="log"></div>
         </div>
 
-        <!-- 
-          NEW “Enable Audio” button
-          Allows user to explicitly unlock audio for alarm playback.
-        -->
+        <!-- NEW “Enable Audio” button -->
         <button id="enableAudioBtn">Aktivér alarm-lyd</button>
       </div>
     </div>
@@ -86,22 +83,22 @@
   <script>
     // State variables
     let isCurrentlyOpen = false;
-    let openStartTime   = 0
+    let openStartTime   = 0;
     let stopwatchInterval = null;
 
     let longestDurationMs    = 0;
     let longestDurationStart = 0;
     let longestDurationEnd   = 0;
 
-    const ALARM_THRESHOLD_MS = 45000; // 45 seconds
+    // 45-second threshold
+    const ALARM_THRESHOLD_MS = 45000;
     let alarmIsPlaying = false;
 
     // DOM references
     let video, statusSpan, canvas, ctx;
     let stopwatchSpan, logDiv;
     let longestPeriodSpan, longestPeriodTimeSpan;
-    let alarmAudio;
-    let enableAudioBtn;  // NEW
+    let alarmAudio, enableAudioBtn;
 
     document.addEventListener('DOMContentLoaded', init);
 
@@ -116,16 +113,16 @@
       longestPeriodTimeSpan= document.getElementById('longestPeriodTime');
 
       alarmAudio           = document.getElementById('alarmAudio');
-      
-      // NEW: “Enable Audio” button
       enableAudioBtn       = document.getElementById('enableAudioBtn');
+
+      // Let user enable alarm sound
       enableAudioBtn.addEventListener('click', () => {
         alarmAudio.play().then(() => {
           alarmAudio.pause();
           alarmAudio.currentTime = 0;
-          console.log("Alarm-lyd aktiveret via brugerinteraktion.");
+          console.log("Alarm-lyd aktiveret via brugerinteraktion (detector).");
         }).catch(err => {
-          console.warn("Audio enable failed:", err);
+          console.warn("Audio enable (detector) failed:", err);
         });
       });
 
@@ -153,14 +150,14 @@
       });
     }
 
-    // Analyze brightness each frame
+    // Analyzes each frame for brightness
     function analyzeFrame() {
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data  = frame.data;
-        let totalLum= 0;
 
+        let totalLum= 0;
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
@@ -183,8 +180,8 @@
         } else if (!isOpen && isCurrentlyOpen) {
           // Åbent -> Lukket
           isCurrentlyOpen = false;
-          stopStopwatch();
-          updateFirebaseStatus(false, null);
+          stopStopwatch();    
+          updateFirebaseStatus(false, null); 
         }
 
         statusSpan.textContent = isOpen ? "Åbent" : "Lukket";
@@ -201,6 +198,7 @@
       });
     }
 
+    // Timer that checks after 45s
     function startStopwatch() {
       if (stopwatchInterval) return;
       stopwatchInterval = setInterval(() => {
@@ -208,7 +206,7 @@
         const elapsed = now - openStartTime;
         stopwatchSpan.textContent = formatTime(elapsed);
 
-        // Check if we should start alarm
+        // If open for 45s, start alarm if not playing
         if (elapsed >= ALARM_THRESHOLD_MS && !alarmIsPlaying) {
           startAlarm();
         }
@@ -220,12 +218,12 @@
         clearInterval(stopwatchInterval);
         stopwatchInterval = null;
       }
-      stopAlarm();
+      stopAlarm(); // If alarm was playing, ensure we stop when closed
 
       const endTime = Date.now();
       const elapsed = endTime - openStartTime;
 
-      // Check if it's the longest
+      // Possibly update "longest opening"
       if (elapsed > longestDurationMs) {
         longestDurationMs    = elapsed;
         longestDurationStart = openStartTime;
@@ -237,7 +235,7 @@
         longestPeriodTimeSpan.textContent = `Klokken ${s} - ${e}`;
       }
 
-      // Local log
+      // Local log entry
       const sStr = formatClockTime(new Date(openStartTime));
       const eStr = formatClockTime(new Date(endTime));
       const durStr = formatTime(elapsed);
@@ -264,10 +262,10 @@
       alarmIsPlaying = true;
       try {
         alarmAudio.play().catch(err => {
-          console.warn("Alarm-lyd fejl:", err);
+          console.warn("Alarm-lyd fejl (detector):", err);
         });
       } catch (err) {
-        console.warn("Alarm-fejl:", err);
+        console.warn("Alarm-fejl (detector):", err);
       }
     }
 
