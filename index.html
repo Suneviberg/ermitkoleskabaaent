@@ -86,7 +86,7 @@
   <script>
     // State variables
     let isCurrentlyOpen = false;
-    let openStartTime   = 0;
+    let openStartTime   = Date.now()
     let stopwatchInterval = null;
 
     let longestDurationMs    = 0;
