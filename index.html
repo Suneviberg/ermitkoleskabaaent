@@ -64,7 +64,7 @@
           <div id="log"></div>
         </div>
 
-        <!-- NEW “Enable Audio” button -->
+        <!-- Enable Audio button -->
         <button id="enableAudioBtn">Aktivér alarm-lyd</button>
       </div>
     </div>
@@ -81,20 +81,20 @@
   <canvas id="canvas" style="display:none;"></canvas>
 
   <script>
-    // State variables
-    let isCurrentlyOpen = false;
-    let openStartTime   = 0;
+    // State
+    let isCurrentlyOpen   = false;
+    let openStartTime     = 0;
     let stopwatchInterval = null;
 
     let longestDurationMs    = 0;
     let longestDurationStart = 0;
     let longestDurationEnd   = 0;
 
-    // 45-second threshold
-    const ALARM_THRESHOLD_MS = 45000;
+    // We'll only look at the local stopwatch for alarm
+    const ALARM_THRESHOLD_MS = 45000; // 45 seconds
     let alarmIsPlaying = false;
 
-    // DOM references
+    // DOM
     let video, statusSpan, canvas, ctx;
     let stopwatchSpan, logDiv;
     let longestPeriodSpan, longestPeriodTimeSpan;
@@ -115,12 +115,11 @@
       alarmAudio           = document.getElementById('alarmAudio');
       enableAudioBtn       = document.getElementById('enableAudioBtn');
 
-      // Let user enable alarm sound
       enableAudioBtn.addEventListener('click', () => {
         alarmAudio.play().then(() => {
           alarmAudio.pause();
           alarmAudio.currentTime = 0;
-          console.log("Alarm-lyd aktiveret via brugerinteraktion (detector).");
+          console.log("Alarm-lyd aktiveret (detector).");
         }).catch(err => {
           console.warn("Audio enable (detector) failed:", err);
         });
@@ -130,7 +129,6 @@
     }
 
     function initCamera() {
-      // Prompt for camera access
       navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false
@@ -145,19 +143,18 @@
         };
       })
       .catch(err => {
-        console.error("Camera error/permission denied:", err);
+        console.error("Camera error:", err);
         statusSpan.textContent = "Kunne ikke få adgang til kameraet.";
       });
     }
 
-    // Analyzes each frame for brightness
     function analyzeFrame() {
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data  = frame.data;
+        let totalLum = 0;
 
-        let totalLum= 0;
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
@@ -167,21 +164,24 @@
         }
         const avgLuminance = totalLum / (canvas.width * canvas.height);
 
-        // threshold for "Åbent" vs "Lukket"
+        // Basic threshold to decide open/close
         const threshold = 80;
-        const isOpen = (avgLuminance > threshold);
+        const isOpen = avgLuminance > threshold;
 
         if (isOpen && !isCurrentlyOpen) {
           // Lukket -> Åbent
           isCurrentlyOpen = true;
           openStartTime   = Date.now();
           startStopwatch();
-          updateFirebaseStatus(true, openStartTime);
+
+          // We'll still write "isOpen" to Firebase, so the monitor can do likewise
+          updateFirebaseStatus(true);
         } else if (!isOpen && isCurrentlyOpen) {
           // Åbent -> Lukket
           isCurrentlyOpen = false;
-          stopStopwatch();    
-          updateFirebaseStatus(false, null); 
+          stopStopwatch();
+
+          updateFirebaseStatus(false);
         }
 
         statusSpan.textContent = isOpen ? "Åbent" : "Lukket";
@@ -189,16 +189,14 @@
       requestAnimationFrame(analyzeFrame);
     }
 
-    // Write open/closed + startTime to Firebase
-    function updateFirebaseStatus(isOpen, startTime) {
+    function updateFirebaseStatus(isOpen) {
       const { db, ref, set } = window.FridgeDB;
       set(ref(db, 'fridge/currentStatus'), {
-        isOpen,
-        startTime
+        isOpen
+        // No "startTime" needed for the alarm logic
       });
     }
 
-    // Timer that checks after 45s
     function startStopwatch() {
       if (stopwatchInterval) return;
       stopwatchInterval = setInterval(() => {
@@ -206,7 +204,7 @@
         const elapsed = now - openStartTime;
         stopwatchSpan.textContent = formatTime(elapsed);
 
-        // If open for 45s, start alarm if not playing
+        // Alarm triggers purely from local stopwatch crossing 45s
         if (elapsed >= ALARM_THRESHOLD_MS && !alarmIsPlaying) {
           startAlarm();
         }
@@ -218,14 +216,15 @@
         clearInterval(stopwatchInterval);
         stopwatchInterval = null;
       }
-      stopAlarm(); // If alarm was playing, ensure we stop when closed
+      stopAlarm();
 
-      const endTime = Date.now();
-      const elapsed = endTime - openStartTime;
+      // Calculate how long it was open
+      const endTime   = Date.now();
+      const elapsedMs = endTime - openStartTime;
 
-      // Possibly update "longest opening"
-      if (elapsed > longestDurationMs) {
-        longestDurationMs    = elapsed;
+      // Check if it's the longest
+      if (elapsedMs > longestDurationMs) {
+        longestDurationMs    = elapsedMs;
         longestDurationStart = openStartTime;
         longestDurationEnd   = endTime;
 
@@ -235,29 +234,28 @@
         longestPeriodTimeSpan.textContent = `Klokken ${s} - ${e}`;
       }
 
-      // Local log entry
-      const sStr = formatClockTime(new Date(openStartTime));
-      const eStr = formatClockTime(new Date(endTime));
-      const durStr = formatTime(elapsed);
+      // Local log
+      const startStr = formatClockTime(new Date(openStartTime));
+      const endStr   = formatClockTime(new Date(endTime));
+      const durStr   = formatTime(elapsedMs);
 
-      const logEntry = document.createElement('div');
-      logEntry.innerText = `Klokken ${sStr} - ${eStr}\nÅben i ${durStr}`;
-      logDiv.prepend(logEntry);
+      const entryDiv = document.createElement('div');
+      entryDiv.innerText = `Klokken ${startStr} - ${endStr}\nÅben i ${durStr}`;
+      logDiv.prepend(entryDiv);
 
-      // Also log to Firebase
+      // Also push to logs in Firebase
       const { db, ref, push } = window.FridgeDB;
       const logsRef = ref(db, 'fridge/logs');
       push(logsRef, {
         start: openStartTime,
         end: endTime,
-        durationMs: elapsed
+        durationMs: elapsedMs
       });
 
-      // Reset
+      // Reset stopwatch display
       stopwatchSpan.textContent = "00:00:00";
     }
 
-    // Alarm control
     function startAlarm() {
       alarmIsPlaying = true;
       try {
@@ -277,22 +275,10 @@
       }
     }
 
-    // Formatting
+    // Utils
     function formatTime(ms) {
-      let totalSeconds = Math.floor(ms / 1000);
-      const hours   = Math.floor(totalSeconds / 3600);
-      totalSeconds %= 3600;
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return [hours, minutes, seconds].map(n => String(n).padStart(2,'0')).join(':');
-    }
-
-    function formatClockTime(dateObj) {
-      const hh = String(dateObj.getHours()).padStart(2,'0');
-      const mm = String(dateObj.getMinutes()).padStart(2,'0');
-      const ss = String(dateObj.getSeconds()).padStart(2,'0');
-      return `${hh}:${mm}:${ss}`;
-    }
-  </script>
-</body>
-</html>
+      let total = Math.floor(ms / 1000);
+      const hh  = Math.floor(total / 3600);
+      total    %= 3600;
+      const mm  = Math.floor(total / 60);
+      const ss  = tota
