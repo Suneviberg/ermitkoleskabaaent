@@ -258,6 +258,14 @@
 
     function startAlarm() {
       alarmIsPlaying = true;
+      
+      // Add this: Write alarm toggle to Firebase
+      const { db, ref, push } = window.FridgeDB;
+      const alarmTogglesRef = ref(db, 'fridge/alarmToggles');
+      push(alarmTogglesRef, {
+        timestamp: Date.now()
+      });
+
       try {
         alarmAudio.play().catch(err => {
           console.warn("Alarm-lyd fejl (detector):", err);
