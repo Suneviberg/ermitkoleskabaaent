@@ -165,7 +165,7 @@
         const avgLuminance = totalLum / (canvas.width * canvas.height);
 
         // Basic threshold to decide open/close
-        const threshold = 80;
+        const threshold = 120;
         const isOpen = avgLuminance > threshold;
 
         if (isOpen && !isCurrentlyOpen) {
